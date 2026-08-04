@@ -1,0 +1,1951 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FORSAKEN 3D : DIE OF DEATH</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+KR:wght@300;500;800&display=swap" rel="stylesheet">
+    <!-- Three.js 3D Engine Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+        body, html {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #030305;
+            color: #e0e0e0;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            width: 100vw;
+        }
+        .title-font {
+            font-family: 'Orbitron', sans-serif;
+        }
+        /* Horror Glow & Pulse Effects */
+        @keyframes horrorPulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(220, 38, 38, 0.4), inset 0 0 20px rgba(220, 38, 38, 0.2); }
+            50% { box-shadow: 0 0 45px rgba(220, 38, 38, 0.85), inset 0 0 35px rgba(220, 38, 38, 0.55); }
+        }
+        .horror-glow {
+            animation: horrorPulse 2.5s infinite ease-in-out;
+        }
+        /* Heartbeat Vignette Flash */
+        @keyframes vignettePulse {
+            0% { opacity: 0.15; transform: scale(1); }
+            50% { opacity: 0.75; transform: scale(1); }
+            100% { opacity: 0.15; transform: scale(1); }
+        }
+        .heartbeat-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            box-shadow: inset 0 0 140px rgba(255, 0, 0, 0.9);
+            z-index: 20;
+            display: none;
+        }
+        .heartbeat-active {
+            display: block;
+            animation: vignettePulse 0.75s infinite ease-in-out;
+        }
+        /* Dark Glassmorphic Panels */
+        .glass-panel {
+            background: rgba(10, 12, 18, 0.88);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+        #webgl-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body class="relative select-none overflow-hidden bg-black">
+
+    <!-- Heartbeat Vignette Overlay -->
+    <div id="heartbeat-vignette" class="heartbeat-overlay"></div>
+
+    <!-- Red Screen Hit/Death Flash Overlay -->
+    <div id="red-flash-overlay" class="absolute inset-0 bg-red-600/50 pointer-events-none z-40 opacity-0 transition-opacity duration-200"></div>
+
+    <!-- Shift Lock Center Crosshair -->
+    <div id="shift-lock-cursor" class="absolute inset-0 pointer-events-none z-40 flex items-center justify-center hidden">
+        <div class="w-5 h-5 relative flex items-center justify-center">
+            <div class="absolute w-4 h-0.5 bg-white/90 shadow-md"></div>
+            <div class="absolute h-4 w-0.5 bg-white/90 shadow-md"></div>
+            <div class="w-1.5 h-1.5 rounded-full bg-red-500 shadow-lg"></div>
+        </div>
+    </div>
+
+    <!-- MAIN START MENU -->
+    <div id="start-screen" class="absolute inset-0 z-50 flex flex-col items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+        <div class="max-w-2xl w-full glass-panel p-8 rounded-2xl text-center border border-red-900/50 shadow-2xl horror-glow">
+            <h1 class="title-font text-5xl md:text-7xl font-black text-red-600 tracking-wider mb-2 drop-shadow-[0_5px_15px_rgba(220,38,38,0.9)]">
+                FORSAKEN 3D
+            </h1>
+            <p class="title-font text-base md:text-xl text-gray-400 tracking-widest mb-6">DIE OF DEATH : SURVIVAL HORROR 3D</p>
+            
+            <p class="text-sm md:text-base text-gray-300 mb-8 leading-relaxed">
+                어두운 3D 밀폐 시설에 갇혔습니다.<br>
+                <span class="text-emerald-400 font-bold">생존자(Survivor)</span>: 발전기 4대 수리 및 판자/구급상자 활용 후 3D 탈출구로 탈출하세요.<br>
+                <span class="text-red-500 font-bold">살인마(Killer)</span>: 압도적인 속도로 생존자들을 추격하고 처단하세요!
+            </p>
+
+            <!-- Role Selector Buttons -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                <button id="select-survivor-btn" onclick="selectRole('SURVIVOR')" class="group relative overflow-hidden p-5 rounded-xl border-2 border-emerald-400 bg-emerald-900/50 transition-all text-left">
+                    <div class="flex items-center space-x-4">
+                        <i class="fa-solid fa-person-running text-3xl text-emerald-400 group-hover:scale-110 transition-transform"></i>
+                        <div>
+                            <div class="text-emerald-400 font-bold text-lg title-font">SURVIVOR</div>
+                            <div class="text-xs text-gray-400">발전기 수리, 스킬 체크 QTE, 판자 쓰러뜨리기, 펀치</div>
+                        </div>
+                    </div>
+                </button>
+
+                <button id="select-killer-btn" onclick="selectRole('KILLER')" class="group relative overflow-hidden p-5 rounded-xl border-2 border-red-600/40 bg-red-950/30 hover:bg-red-900/50 transition-all text-left">
+                    <div class="flex items-center space-x-4">
+                        <i class="fa-solid fa-skull text-3xl text-red-500 group-hover:scale-110 transition-transform"></i>
+                        <div>
+                            <div class="text-red-500 font-bold text-lg title-font">KILLER</div>
+                            <div class="text-xs text-gray-400">빠른 이동, 레드 스테인 시야, 칼 베기 & 출혈 공격</div>
+                        </div>
+                    </div>
+                </button>
+            </div>
+
+            <!-- Controls Guide -->
+            <div class="bg-gray-900/80 p-4 rounded-xl text-xs text-gray-400 grid grid-cols-2 md:grid-cols-5 gap-2 mb-6 border border-gray-800">
+                <div><span class="text-white font-bold">WASD / 화살표</span><br>3D 캐릭터 이동</div>
+                <div><span class="text-white font-bold">Shift</span><br>쉬프트 락 On/Off</div>
+                <div><span class="text-white font-bold">우클릭 드래그</span><br>Roblox 시점 회전</div>
+                <div><span class="text-white font-bold">E 키</span><br>발전기/판자/아이템 상호작용</div>
+                <div><span class="text-white font-bold">Space / F / R</span><br>대시 / 펀치 / 출혈 베기</div>
+            </div>
+
+            <button onclick="startGame()" class="w-full py-4 rounded-xl font-black text-xl tracking-wider uppercase text-white bg-gradient-to-r from-red-700 via-red-600 to-red-800 hover:from-red-600 hover:to-red-700 shadow-xl hover:shadow-red-900/60 transition-all transform hover:-translate-y-0.5">
+                3D 게임 시작 (START GAME)
+            </button>
+        </div>
+    </div>
+
+    <!-- IN-GAME HUD OVERLAY -->
+    <div id="hud-overlay" class="absolute inset-0 pointer-events-none z-30 flex flex-col justify-between p-4 hidden">
+        <!-- Top Status Bar -->
+        <div class="flex justify-between items-start">
+            <!-- Objective Box -->
+            <div class="glass-panel px-4 py-3 rounded-xl border border-gray-700/50 flex items-center space-x-4 pointer-events-auto shadow-lg">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-bolt text-yellow-400 text-xl animate-bounce"></i>
+                    <div>
+                        <div class="text-xs text-gray-400">발전기 수리</div>
+                        <div id="gen-count-text" class="text-lg font-extrabold text-white title-font">0 / 4</div>
+                    </div>
+                </div>
+                <div class="h-8 w-px bg-gray-700"></div>
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-clock text-amber-400 text-xl animate-pulse"></i>
+                    <div>
+                        <div class="text-xs text-gray-400">탈출 제한시간</div>
+                        <div id="game-timer-text" class="text-lg font-extrabold text-amber-400 title-font">03:00</div>
+                    </div>
+                </div>
+                <div class="h-8 w-px bg-gray-700"></div>
+                <div class="flex items-center space-x-2">
+                    <i id="exit-icon" class="fa-solid fa-door-closed text-gray-500 text-xl"></i>
+                    <div>
+                        <div class="text-xs text-gray-400">탈출구 상태</div>
+                        <div id="exit-status-text" class="text-xs font-bold text-red-400">잠김</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Minimap & Alive Counter -->
+            <div class="flex space-x-3 items-start pointer-events-auto">
+                <div class="glass-panel p-2 rounded-xl border border-gray-700/50 flex flex-col items-center">
+                    <canvas id="minimap-canvas" width="100" height="100" class="rounded-lg bg-black/80 border border-gray-800"></canvas>
+                    <span class="text-[9px] text-gray-400 mt-1">RADAR MAP</span>
+                </div>
+                <div class="glass-panel px-4 py-3 rounded-xl border border-gray-700/50 text-right">
+                    <div class="text-xs text-gray-400">생존자 남은 인원</div>
+                    <div id="survivors-alive-text" class="text-lg font-bold text-emerald-400 title-font">4 명</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notification Toast Message -->
+        <div id="toast-msg" class="self-center bg-black/90 text-yellow-400 px-6 py-2.5 rounded-full text-sm font-bold border border-yellow-500/30 opacity-0 transition-opacity duration-300 shadow-2xl">
+            상호작용 메시지
+        </div>
+
+        <!-- Interactive QTE Skill Check Dial -->
+        <div id="qte-container" class="self-center mb-8 pointer-events-auto flex flex-col items-center hidden">
+            <div class="relative w-40 h-40 rounded-full border-4 border-gray-800 bg-black/90 flex items-center justify-center shadow-2xl">
+                <canvas id="qte-canvas" width="160" height="160" class="absolute inset-0"></canvas>
+                <div class="text-center z-10">
+                    <div class="text-xs text-yellow-400 font-extrabold uppercase tracking-wider">SPACE / TAP</div>
+                    <div class="text-[10px] text-gray-400 mt-1">스킬 체크 타격!</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Status Bar (Health, Stamina, Inventory, Abilities) -->
+        <div class="flex flex-col md:flex-row justify-between items-end gap-4">
+            <!-- Player Health & Stamina -->
+            <div class="glass-panel p-4 rounded-xl border border-gray-700/50 w-full md:w-80 pointer-events-auto">
+                <div class="flex justify-between items-center mb-1">
+                    <span id="role-badge" class="text-xs font-bold px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-700">생존자</span>
+                    <span id="health-text" class="text-xs text-gray-300 font-bold">체력: 100%</span>
+                </div>
+                <!-- Health Bar -->
+                <div class="w-full bg-gray-900 h-3 rounded-full overflow-hidden mb-2 border border-gray-800">
+                    <div id="health-bar" class="bg-gradient-to-r from-red-600 to-emerald-500 h-full w-full transition-all duration-300"></div>
+                </div>
+
+                <div class="flex justify-between items-center mb-1">
+                    <span class="text-xs text-gray-400">스태미나</span>
+                    <span id="stamina-text" class="text-xs text-amber-400">100%</span>
+                </div>
+                <!-- Stamina Bar -->
+                <div class="w-full bg-gray-900 h-2.5 rounded-full overflow-hidden border border-gray-800">
+                    <div id="stamina-bar" class="bg-amber-500 h-full w-full transition-all duration-100"></div>
+                </div>
+
+                <!-- Item Inventory Indicator -->
+                <div id="item-inventory-box" class="flex justify-between items-center mt-2 pt-2 border-t border-gray-800 text-xs">
+                    <span class="text-gray-400">보유 아이템:</span>
+                    <span id="item-name-text" class="font-bold text-cyan-400">없음</span>
+                </div>
+            </div>
+
+            <!-- Ability & Interaction Buttons -->
+            <div class="flex space-x-3 pointer-events-auto">
+                <button id="btn-shiftlock" onclick="toggleShiftLock()" class="glass-panel p-3 rounded-xl border border-gray-700 flex flex-col items-center justify-center w-20 h-20 active:scale-95 transition-transform hover:border-cyan-500/50">
+                    <i class="fa-solid fa-lock text-xl text-cyan-400 mb-1"></i>
+                    <span id="shiftlock-btn-text" class="text-[10px] text-gray-300">쉬프트락: OFF</span>
+                    <span class="text-[9px] text-gray-500">[Shift]</span>
+                </button>
+                <button id="btn-ability1" onclick="useAbility(1)" class="glass-panel p-3 rounded-xl border border-gray-700 flex flex-col items-center justify-center w-20 h-20 active:scale-95 transition-transform hover:border-yellow-500/50">
+                    <i class="fa-solid fa-bolt text-xl text-yellow-400 mb-1"></i>
+                    <span class="text-[10px] text-gray-300">대시</span>
+                    <span class="text-[9px] text-gray-500">[Space]</span>
+                </button>
+                <button id="btn-ability2" onclick="useAbility(2)" class="glass-panel p-3 rounded-xl border border-gray-700 flex flex-col items-center justify-center w-20 h-20 active:scale-95 transition-transform hover:border-amber-500/50">
+                    <i id="ability2-icon" class="fa-solid fa-hand-back-fist text-xl text-amber-300 mb-1"></i>
+                    <span id="ability2-name" class="text-[10px] text-gray-300">펀치</span>
+                    <span id="ability2-key" class="text-[9px] text-gray-500">[F / 좌클릭]</span>
+                </button>
+                <button id="btn-ability-r" onclick="useAbility(3)" class="glass-panel p-3 rounded-xl border border-red-700 bg-red-950/40 flex flex-col items-center justify-center w-20 h-20 active:scale-95 transition-transform hover:border-red-500 hidden">
+                    <i class="fa-solid fa-droplet text-xl text-red-500 mb-1 animate-pulse"></i>
+                    <span class="text-[10px] text-red-300 font-bold">출혈 베기</span>
+                    <span class="text-[9px] text-gray-400">[R]</span>
+                </button>
+                <button id="btn-interact" onclick="handleInteractPress()" class="glass-panel p-3 rounded-xl border border-emerald-500/60 bg-emerald-950/40 flex flex-col items-center justify-center w-20 h-20 active:scale-95 transition-transform hover:bg-emerald-900/50">
+                    <i class="fa-solid fa-hand text-xl text-emerald-400 mb-1"></i>
+                    <span class="text-[10px] text-emerald-300 font-bold">상호작용</span>
+                    <span class="text-[9px] text-gray-400">[E]</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Virtual Joystick -->
+    <div id="touch-controls" class="absolute bottom-6 left-6 z-40 pointer-events-auto hidden md:hidden">
+        <div id="joystick-zone" class="w-32 h-32 rounded-full bg-white/10 border border-white/20 relative flex items-center justify-center backdrop-blur-sm">
+            <div id="joystick-knob" class="w-12 h-12 rounded-full bg-red-500/70 border border-white/40 absolute top-10 left-10 transition-transform duration-75 shadow-lg"></div>
+        </div>
+    </div>
+
+    <!-- 3D GAME CANVAS CONTAINER -->
+    <canvas id="webgl-canvas"></canvas>
+
+    <!-- GAME RESULT MODAL -->
+    <div id="result-screen" class="absolute inset-0 z-50 flex flex-col items-center justify-center p-4 bg-black/95 hidden">
+        <div class="max-w-md w-full glass-panel p-8 rounded-2xl text-center border shadow-2xl">
+            <div id="result-icon-box" class="w-20 h-20 mx-auto rounded-full flex items-center justify-center text-4xl mb-4 bg-emerald-950/80 border border-emerald-500">
+                <i id="result-icon" class="fa-solid fa-trophy text-emerald-400"></i>
+            </div>
+            <h2 id="result-title" class="title-font text-4xl font-extrabold mb-2">VICTORY</h2>
+            <p id="result-desc" class="text-sm text-gray-300 mb-6">성공적으로 3D 시설에서 탈출했습니다!</p>
+
+            <div class="bg-gray-900/80 p-4 rounded-xl text-left space-y-2 mb-6 text-sm text-gray-300 border border-gray-800">
+                <div class="flex justify-between"><span>수리한 발전기:</span><span id="stat-gens" class="font-bold text-yellow-400">0</span></div>
+                <div class="flex justify-between"><span>생존 시간:</span><span id="stat-time" class="font-bold text-white">00:00</span></div>
+                <div class="flex justify-between"><span>획득 점수:</span><span id="stat-score" class="font-bold text-emerald-400">0 XP</span></div>
+            </div>
+
+            <button onclick="restartToMenu()" class="w-full py-3.5 rounded-xl font-bold text-white bg-gradient-to-r from-gray-700 to-gray-900 hover:from-gray-600 hover:to-gray-800 border border-gray-600 transition-all">
+                메인 메뉴로 이동
+            </button>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT GAME LOGIC -->
+    <script>
+        // Web Audio Synthesizer for Dynamic Horror Sound Effects
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+            }
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+            playHeartbeat() {
+                if (!this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(70, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.12);
+                    
+                    gain.gain.setValueAtTime(0.65, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.12);
+                    
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.12);
+                } catch(e) {}
+            }
+            playBeep(freq = 440, duration = 0.1, type = 'sine') {
+                if (!this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch(e) {}
+            }
+            playScream() {
+                if (!this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(900, this.ctx.currentTime);
+                    osc.frequency.linearRampToValueAtTime(180, this.ctx.currentTime + 0.5);
+                    gain.gain.setValueAtTime(0.5, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.5);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.5);
+                } catch(e) {}
+            }
+            playSlashSound() {
+                if (!this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(500, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + 0.15);
+                    gain.gain.setValueAtTime(0.6, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.15);
+                } catch(e) {}
+            }
+            playPunchSound() {
+                if (!this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(180, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.15);
+                    gain.gain.setValueAtTime(0.7, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.15);
+                } catch(e) {}
+            }
+            playPalletCrash() {
+                if (!this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(120, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(20, this.ctx.currentTime + 0.25);
+                    gain.gain.setValueAtTime(0.8, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.25);
+                } catch(e) {}
+            }
+            playGeneratorFix() {
+                this.playBeep(523.25, 0.12, 'triangle');
+                setTimeout(() => this.playBeep(659.25, 0.12, 'triangle'), 100);
+                setTimeout(() => this.playBeep(783.99, 0.2, 'triangle'), 200);
+            }
+        }
+        const audio = new SoundEngine();
+
+        // Game Core States
+        let gameState = 'MENU';
+        let selectedRole = 'SURVIVOR';
+        let gameTime = 0;
+        let remainingTime = 180; // 3분 (180초) 제한시간
+        let lastTimestamp = 0;
+
+        // Key State
+        const keys = {};
+        const touchJoystick = { active: false, startX: 0, startY: 0, moveX: 0, moveY: 0 };
+
+        // Three.js Core Variables
+        let scene, camera, renderer;
+        let survivorsList = [];
+        let playerObj = null;
+        let killerObj = null;
+
+        // Roblox Orbit & Shift-Lock Camera Controls
+        let cameraAngleX = 0;
+        let cameraAngleY = 0.4;
+        let targetCameraAngleX = 0;
+        let targetCameraAngleY = 0.4;
+        let camDistance = 18;
+        let isRightMouseDown = false;
+        let mouseX = 0, mouseY = 0;
+        let isShiftLock = false;
+        const MOUSE_SENSITIVITY = 0.0035;
+
+        // 3D Interactive Map Elements
+        let generators = [];
+        let pallets = [];
+        let mapItems = [];
+        let exitGateObj = null;
+        let wallColliders = [];
+        let particles3D = [];
+
+        // QTE Dial State
+        let qteActive = false;
+        let qteAngle = 0;
+        let qteTargetStart = 0;
+        let qteTargetEnd = 0;
+        let qteSpeed = 0.048;
+        let qteCurrentGen = null;
+
+        // Map Size Boundary
+        const MAP_SIZE = 120;
+
+        function initThreeScene() {
+            const canvas = document.getElementById('webgl-canvas');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x111827);
+            scene.fog = new THREE.FogExp2(0x111827, 0.012);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            
+            renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // Ambient & Directional Moonlight
+            const ambientLight = new THREE.AmbientLight(0x94a3b8, 1.2);
+            scene.add(ambientLight);
+
+            const moonLight = new THREE.DirectionalLight(0xe0f2fe, 1.3);
+            moonLight.position.set(30, 80, 30);
+            moonLight.castShadow = true;
+            moonLight.shadow.mapSize.width = 1024;
+            moonLight.shadow.mapSize.height = 1024;
+            scene.add(moonLight);
+        }
+
+        function createEnvironment() {
+            // Procedural Grid Floor Texture
+            const floorGeo = new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE);
+            const tileCanvas = document.createElement('canvas');
+            tileCanvas.width = 256; tileCanvas.height = 256;
+            const tctx = tileCanvas.getContext('2d');
+            tctx.fillStyle = '#0b0f19'; tctx.fillRect(0, 0, 256, 256);
+            tctx.strokeStyle = '#1e293b'; tctx.lineWidth = 4;
+            tctx.strokeRect(0, 0, 256, 256);
+            
+            const floorTex = new THREE.CanvasTexture(tileCanvas);
+            floorTex.wrapS = THREE.RepeatWrapping; floorTex.wrapT = THREE.RepeatWrapping;
+            floorTex.repeat.set(24, 24);
+
+            const floorMat = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.8, metalness: 0.2 });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // Metallic Wall Material
+            const wallMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.8, metalness: 0.2 });
+            wallColliders = [];
+
+            function addWall(x, z, w, d, h = 8) {
+                const wallGeo = new THREE.BoxGeometry(w, h, d);
+                const wall = new THREE.Mesh(wallGeo, wallMat);
+                wall.position.set(x, h / 2, z);
+                wall.castShadow = true;
+                wall.receiveShadow = true;
+                scene.add(wall);
+
+                wallColliders.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 });
+            }
+
+            // Outer Perimeter Boundary Walls
+            const halfS = MAP_SIZE / 2;
+            addWall(0, -halfS, MAP_SIZE, 2);
+            addWall(0, halfS, MAP_SIZE, 2);
+            addWall(-halfS, 0, 2, MAP_SIZE);
+            addWall(halfS, 0, 2, MAP_SIZE);
+
+            // Interior Facility Obstacles
+            addWall(-20, -20, 20, 2);
+            addWall(-20, -10, 2, 20);
+            addWall(20, -20, 2, 25);
+            addWall(0, 15, 30, 2);
+            addWall(-30, 25, 2, 20);
+            addWall(25, 25, 20, 2);
+            addWall(-15, -40, 2, 20);
+            addWall(20, -45, 25, 2);
+
+            // Add Crates
+            const crateMat = new THREE.MeshStandardMaterial({ color: 0x374151, roughness: 0.7 });
+            for (let i = 0; i < 16; i++) {
+                const cx = (Math.random() - 0.5) * (MAP_SIZE - 20);
+                const cz = (Math.random() - 0.5) * (MAP_SIZE - 20);
+                const crate = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), crateMat);
+                crate.position.set(cx, 1.5, cz);
+                crate.castShadow = true; crate.receiveShadow = true;
+                scene.add(crate);
+                wallColliders.push({ minX: cx - 1.8, maxX: cx + 1.8, minZ: cz - 1.8, maxZ: cz + 1.8 });
+            }
+        }
+
+        function createGeneratorsAndExit() {
+            generators = [];
+            pallets = [];
+            mapItems = [];
+
+            const genPositions = [
+                { x: -40, z: -40 },
+                { x: 40, z: -35 },
+                { x: 0, z: 0 },
+                { x: -35, z: 35 },
+                { x: 40, z: 40 }
+            ];
+
+            genPositions.forEach((pos, idx) => {
+                const group = new THREE.Group();
+
+                const bodyGeo = new THREE.BoxGeometry(4, 3, 3);
+                const bodyMat = new THREE.MeshStandardMaterial({ color: 0x4b5563, roughness: 0.5 });
+                const body = new THREE.Mesh(bodyGeo, bodyMat);
+                body.position.y = 1.5; body.castShadow = true;
+                group.add(body);
+
+                const pistonGeo = new THREE.CylinderGeometry(0.5, 0.5, 1.2, 8);
+                const pistonMat = new THREE.MeshStandardMaterial({ color: 0x9ca3af, metalness: 0.8 });
+                const p1 = new THREE.Mesh(pistonGeo, pistonMat); p1.position.set(-1, 3.3, 0);
+                const p2 = new THREE.Mesh(pistonGeo, pistonMat); p2.position.set(1, 3.3, 0);
+                group.add(p1); group.add(p2);
+
+                const lightGeo = new THREE.SphereGeometry(0.6, 16, 16);
+                const lightMat = new THREE.MeshBasicMaterial({ color: 0xd97706 });
+                const statusLight = new THREE.Mesh(lightGeo, lightMat);
+                statusLight.position.set(0, 3.8, 0);
+                group.add(statusLight);
+
+                const pointLight = new THREE.PointLight(0xd97706, 0.8, 12);
+                pointLight.position.set(0, 4, 0);
+                group.add(pointLight);
+
+                group.position.set(pos.x, 0, pos.z);
+                scene.add(group);
+
+                generators.push({
+                    id: idx + 1, x: pos.x, z: pos.z, progress: 0, completed: false,
+                    meshGroup: group, statusLight: statusLight, pointLight: pointLight
+                });
+            });
+
+            // 3D Wooden Pallets in Corridors
+            const palletPositions = [
+                { x: -20, z: 0 },
+                { x: 20, z: 0 },
+                { x: 0, z: 30 },
+                { x: 0, z: -30 }
+            ];
+
+            palletPositions.forEach((p, idx) => {
+                const pMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.9 });
+                const palletMesh = new THREE.Mesh(new THREE.BoxGeometry(1.2, 3.5, 3.8), pMat);
+                palletMesh.position.set(p.x, 1.75, p.z);
+                palletMesh.castShadow = true;
+                scene.add(palletMesh);
+
+                pallets.push({ id: idx, x: p.x, z: p.z, dropped: false, broken: false, mesh: palletMesh });
+            });
+
+            // 3D Medkits on the ground
+            const itemPositions = [
+                { x: -10, z: -10, type: 'MEDKIT' },
+                { x: 15, z: 20, type: 'MEDKIT' }
+            ];
+
+            itemPositions.forEach((i, idx) => {
+                const itemGeo = new THREE.BoxGeometry(1.2, 0.8, 1.2);
+                const itemMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.3 });
+                const itemMesh = new THREE.Mesh(itemGeo, itemMat);
+                itemMesh.position.set(i.x, 0.4, i.z);
+                scene.add(itemMesh);
+
+                mapItems.push({ id: idx, x: i.x, z: i.z, type: i.type, picked: false, mesh: itemMesh });
+            });
+
+            // Construct 3D Exit Gate Frame
+            const exitGroup = new THREE.Group();
+            const gateFrameMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.3, metalness: 0.8 });
+            
+            const pillarLeft = new THREE.Mesh(new THREE.BoxGeometry(2, 10, 2), gateFrameMat);
+            pillarLeft.position.set(-6, 5, 0);
+            const pillarRight = new THREE.Mesh(new THREE.BoxGeometry(2, 10, 2), gateFrameMat);
+            pillarRight.position.set(6, 5, 0);
+            const topArch = new THREE.Mesh(new THREE.BoxGeometry(14, 2, 2), gateFrameMat);
+            topArch.position.set(0, 10, 0);
+
+            exitGroup.add(pillarLeft); exitGroup.add(pillarRight); exitGroup.add(topArch);
+
+            const exitLightMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+            const exitLightMesh = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 16), exitLightMat);
+            exitLightMesh.position.set(0, 11.5, 0);
+            exitGroup.add(exitLightMesh);
+
+            exitGroup.position.set(0, 0, -(MAP_SIZE / 2 - 2));
+            scene.add(exitGroup);
+
+            exitGateObj = { x: 0, z: -(MAP_SIZE / 2 - 2), opened: false, lightMesh: exitLightMesh };
+        }
+
+        function createRobloxCharacter(colorHex, isKiller = false) {
+            const group = new THREE.Group();
+
+            const bodyMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.4 });
+            const headMat = new THREE.MeshStandardMaterial({ color: isKiller ? 0x991b1b : 0xfde047, roughness: 0.3 });
+
+            // Torso Group & Mesh
+            const torsoGroup = new THREE.Group();
+            torsoGroup.position.y = 2.0;
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.0, 1.0), bodyMat);
+            torso.castShadow = true;
+            torsoGroup.add(torso);
+            group.add(torsoGroup);
+
+            // Head Joint (Pivot at Neck Base)
+            const headPivot = new THREE.Group();
+            headPivot.position.set(0, 1.0, 0);
+            const head = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), headMat);
+            head.position.set(0, 0.6, 0);
+            head.castShadow = true;
+            headPivot.add(head);
+            torsoGroup.add(headPivot);
+
+            // Left Arm Joint (Pivot at Shoulder Top)
+            const leftArmPivot = new THREE.Group();
+            leftArmPivot.position.set(-1.25, 0.9, 0);
+            const armGeo = new THREE.BoxGeometry(0.7, 1.8, 0.7);
+            const leftArm = new THREE.Mesh(armGeo, bodyMat);
+            leftArm.position.set(0, -0.9, 0);
+            leftArm.castShadow = true;
+            leftArmPivot.add(leftArm);
+            torsoGroup.add(leftArmPivot);
+
+            // Right Arm Joint (Pivot at Shoulder Top)
+            const rightArmPivot = new THREE.Group();
+            rightArmPivot.position.set(1.25, 0.9, 0);
+            const rightArm = new THREE.Mesh(armGeo, bodyMat);
+            rightArm.position.set(0, -0.9, 0);
+            rightArm.castShadow = true;
+            rightArmPivot.add(rightArm);
+            torsoGroup.add(rightArmPivot);
+
+            // Left Leg Joint (Pivot at Hip Top)
+            const leftLegPivot = new THREE.Group();
+            leftLegPivot.position.set(-0.45, 1.8, 0);
+            const legGeo = new THREE.BoxGeometry(0.75, 1.8, 0.75);
+            const leftLeg = new THREE.Mesh(legGeo, bodyMat);
+            leftLeg.position.set(0, -0.9, 0);
+            leftLeg.castShadow = true;
+            leftLegPivot.add(leftLeg);
+            group.add(leftLegPivot);
+
+            // Right Leg Joint (Pivot at Hip Top)
+            const rightLegPivot = new THREE.Group();
+            rightLegPivot.position.set(0.45, 1.8, 0);
+            const rightLeg = new THREE.Mesh(legGeo, bodyMat);
+            rightLeg.position.set(0, -0.9, 0);
+            rightLeg.castShadow = true;
+            rightLegPivot.add(rightLeg);
+            group.add(rightLegPivot);
+
+            let knifeGroup = null;
+
+            if (isKiller) {
+                // Red Stain Light
+                const redStain = new THREE.SpotLight(0xef4444, 3.5, 20, Math.PI / 4, 0.5, 1);
+                redStain.position.set(0, 0.2, 0.5);
+                redStain.target.position.set(0, -1.5, 12);
+                torsoGroup.add(redStain);
+                torsoGroup.add(redStain.target);
+
+                // 3D Knife attached to right arm
+                knifeGroup = new THREE.Group();
+                const handle = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.5, 0.18), new THREE.MeshStandardMaterial({ color: 0x1c1917 }));
+                handle.position.set(0, -0.25, 0); knifeGroup.add(handle);
+
+                const blade = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.4, 0.32), new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.95 }));
+                blade.position.set(0, 0.7, 0.1); knifeGroup.add(blade);
+
+                knifeGroup.rotation.x = Math.PI / 2;
+                knifeGroup.position.set(0, -1.1, 0.3);
+                rightArm.add(knifeGroup);
+            }
+
+            scene.add(group);
+            return { 
+                mesh: group, torsoGroup, torso, headPivot, head, 
+                leftArmPivot, leftArm, rightArmPivot, rightArm, 
+                leftLegPivot, leftLeg, rightLegPivot, rightLeg, 
+                knifeGroup, animTimer: 0, idleTimer: Math.random() * 10
+            };
+        }
+
+        class CharacterEntity {
+            constructor(x, z, role, isAI = false) {
+                this.x = x; this.z = z; this.role = role; this.isAI = isAI;
+                this.speed = role === 'KILLER' ? 12.0 : 9.5;
+                this.rotationAngle = 0;
+
+                this.health = 100; this.stamina = 100; this.maxStamina = 100;
+                this.isDead = false; this.isDying = false; this.deathProgress = 0;
+                this.isSprinting = false;
+                this.isStunned = 0;
+                this.punchCooldown = 0; this.rAbilityCD = 0; this.attackCooldown = 0;
+                this.bleedTimer = 0;
+
+                this.hasMedkit = false;
+
+                // Dedicated Die of Death Skill Animation Timers
+                this.punchAnimTimer = 0;
+                this.slashAnimTimer = 0;
+                this.bleedAnimTimer = 0;
+                this.dashAnimTimer = 0;
+                this.kickAnimTimer = 0;
+                this.palletSlamTimer = 0;
+
+                // Smart AI Decision States
+                this.aiState = role === 'KILLER' ? 'PATROL' : 'REPAIR';
+                this.patrolIndex = Math.floor(Math.random() * 5);
+                this.targetGen = null;
+                this.lastKnownPos = null;
+                this.lostTargetTimer = 0;
+                this.aiRayAngleOffset = 0;
+
+                const colorHex = role === 'KILLER' ? 0xdc2626 : 0x10b981;
+                this.avatar = createRobloxCharacter(colorHex, role === 'KILLER');
+                this.avatar.mesh.position.set(x, 0, z);
+            }
+
+            triggerDeathRagdoll() {
+                if (this.isDying || this.isDead) return;
+                this.isDying = true;
+                this.deathProgress = 0;
+            }
+
+            update(dt) {
+                // Roblox Die of Death Death Tipping Ragdoll Animation
+                if (this.isDying) {
+                    this.deathProgress += dt * 2.2;
+                    const p = Math.min(1.0, this.deathProgress);
+
+                    this.avatar.mesh.rotation.x = p * (Math.PI / 2.1);
+                    this.avatar.mesh.position.y = Math.max(0.3, 0.3 * (1.0 - p));
+                    this.avatar.headPivot.rotation.z = p * 0.4;
+                    this.avatar.leftArmPivot.rotation.z = -p * 0.8;
+                    this.avatar.rightArmPivot.rotation.z = p * 0.8;
+                    this.avatar.leftLegPivot.rotation.x = p * 0.3;
+                    this.avatar.rightLegPivot.rotation.x = -p * 0.3;
+
+                    if (p >= 1.0 && !this.isDead) {
+                        this.isDead = true;
+                        setTimeout(() => {
+                            if (this.avatar && this.avatar.mesh) scene.remove(this.avatar.mesh);
+                        }, 1200);
+                    }
+                    return;
+                }
+
+                if (this.isDead) return;
+
+                if (this.isStunned > 0) {
+                    this.isStunned -= dt;
+                    this.applySkillAnimations(dt);
+                    return;
+                }
+
+                if (this.punchCooldown > 0) this.punchCooldown -= dt;
+                if (this.rAbilityCD > 0) this.rAbilityCD -= dt;
+                if (this.attackCooldown > 0) this.attackCooldown -= dt;
+
+                // Update Skill Timers
+                if (this.punchAnimTimer > 0) this.punchAnimTimer = Math.max(0, this.punchAnimTimer - dt);
+                if (this.slashAnimTimer > 0) this.slashAnimTimer = Math.max(0, this.slashAnimTimer - dt);
+                if (this.bleedAnimTimer > 0) this.bleedAnimTimer = Math.max(0, this.bleedAnimTimer - dt);
+                if (this.kickAnimTimer > 0) this.kickAnimTimer = Math.max(0, this.kickAnimTimer - dt);
+                if (this.palletSlamTimer > 0) this.palletSlamTimer = Math.max(0, this.palletSlamTimer - dt);
+
+                if (this.dashAnimTimer > 0) {
+                    this.dashAnimTimer = Math.max(0, this.dashAnimTimer - dt);
+                    if (Math.random() < 0.6) createDashTrail3D(this.x, 0.3, this.z);
+                }
+
+                // Bleed Processing
+                if (this.bleedTimer > 0) {
+                    this.bleedTimer -= dt;
+                    this.health = Math.max(0, this.health - 2.0 * dt);
+                    if (Math.random() < 0.25) createBlood3D(this.x, 1.5, this.z);
+
+                    if (this.health <= 0 && !this.isDying) {
+                        this.triggerDeathRagdoll();
+                        updateAliveCountUI();
+                        triggerRedFlash();
+                        if (this === playerObj) triggerGameOver(false, "출혈로 사망했습니다!");
+                        else checkAllSurvivorsDead();
+                    }
+                }
+
+                // Stamina Recovery
+                let currentSpeed = this.speed;
+                if (this.isSprinting && this.stamina > 0) {
+                    currentSpeed *= 1.45;
+                    this.stamina = Math.max(0, this.stamina - 28 * dt);
+                    if (this.stamina === 0) this.isSprinting = false;
+                } else {
+                    this.stamina = Math.min(this.maxStamina, this.stamina + 14 * dt);
+                }
+
+                if (this.isAI) this.updateAI(dt, currentSpeed);
+
+                this.avatar.mesh.position.set(this.x, 0, this.z);
+                this.avatar.mesh.rotation.y = this.rotationAngle;
+
+                this.applySkillAnimations(dt);
+            }
+
+            applySkillAnimations(dt) {
+                const avatar = this.avatar;
+
+                // Reset Joints to base defaults
+                avatar.mesh.rotation.x = 0;
+                avatar.torsoGroup.rotation.x = 0;
+                avatar.torsoGroup.rotation.y = 0;
+                avatar.torsoGroup.rotation.z = 0;
+                avatar.headPivot.rotation.x = 0;
+                avatar.headPivot.rotation.y = 0;
+                avatar.headPivot.rotation.z = 0;
+                avatar.leftArmPivot.rotation.set(0, 0, 0);
+                avatar.rightArmPivot.rotation.set(0, 0, 0);
+
+                // Roblox Stun Wobble Pose
+                if (this.isStunned > 0) {
+                    const wobble = Math.sin(performance.now() * 0.018) * 0.25;
+                    avatar.torsoGroup.rotation.z = wobble;
+                    avatar.headPivot.rotation.x = -0.3 + wobble * 0.5;
+                    avatar.leftArmPivot.rotation.x = -Math.PI * 0.75;
+                    avatar.leftArmPivot.rotation.z = 0.35;
+                    avatar.rightArmPivot.rotation.x = -Math.PI * 0.75;
+                    avatar.rightArmPivot.rotation.z = -0.35;
+                    return;
+                }
+
+                // Roblox Dash / Lean Forward Pose
+                if (this.dashAnimTimer > 0) {
+                    avatar.torsoGroup.rotation.x = 0.35;
+                    avatar.leftArmPivot.rotation.x = 0.6;
+                    avatar.rightArmPivot.rotation.x = 0.6;
+                }
+
+                // Survivor Punch Skill Pose
+                if (this.punchAnimTimer > 0) {
+                    const p = 1.0 - (this.punchAnimTimer / 0.4);
+                    const punchExt = Math.sin(p * Math.PI);
+
+                    avatar.torsoGroup.rotation.y = -punchExt * 0.6;
+                    avatar.rightArmPivot.rotation.x = -Math.PI * 0.55 * punchExt;
+                    avatar.rightArmPivot.rotation.y = -punchExt * 0.2;
+                    avatar.leftArmPivot.rotation.x = punchExt * 0.7; // Left Guard
+                    return;
+                }
+
+                // Killer Knife Slash Animation
+                if (this.slashAnimTimer > 0) {
+                    const p = 1.0 - (this.slashAnimTimer / 0.4);
+                    const slash = Math.sin(p * Math.PI);
+
+                    avatar.torsoGroup.rotation.y = slash * 0.75;
+                    avatar.rightArmPivot.rotation.x = -Math.PI * 0.3 - slash * 1.5;
+                    avatar.rightArmPivot.rotation.z = -slash * 0.8;
+                    return;
+                }
+
+                // Killer Heavy Bleed Overhead Strike
+                if (this.bleedAnimTimer > 0) {
+                    const p = 1.0 - (this.bleedAnimTimer / 0.5);
+                    const heavy = Math.sin(p * Math.PI);
+
+                    avatar.torsoGroup.rotation.x = heavy * 0.4;
+                    avatar.rightArmPivot.rotation.x = -Math.PI * 0.95 + heavy * 2.3;
+                    avatar.leftArmPivot.rotation.x = -Math.PI * 0.75 + heavy * 1.8;
+                    return;
+                }
+
+                // Killer Pallet Kick Animation
+                if (this.kickAnimTimer > 0) {
+                    const p = 1.0 - (this.kickAnimTimer / 0.45);
+                    const kick = Math.sin(p * Math.PI);
+
+                    avatar.torsoGroup.rotation.x = -kick * 0.2;
+                    avatar.rightLegPivot.rotation.x = -Math.PI * 0.5 * kick;
+                    return;
+                }
+
+                // Survivor Pallet Push Slam Animation
+                if (this.palletSlamTimer > 0) {
+                    const p = 1.0 - (this.palletSlamTimer / 0.4);
+                    const slam = Math.sin(p * Math.PI);
+
+                    avatar.torsoGroup.rotation.x = slam * 0.3;
+                    avatar.leftArmPivot.rotation.x = -Math.PI * 0.5 * slam;
+                    avatar.rightArmPivot.rotation.x = -Math.PI * 0.5 * slam;
+                    return;
+                }
+
+                // Stationary Roblox R6 Idle Breath
+                if (!keys['KeyW'] && !keys['w'] && !keys['KeyS'] && !keys['s'] && 
+                    !keys['KeyA'] && !keys['a'] && !keys['KeyD'] && !keys['d'] && !this.isAI) {
+                    avatar.idleTimer += dt * 2.2;
+                    const breathe = Math.sin(avatar.idleTimer) * 0.04;
+                    const sway = Math.sin(avatar.idleTimer * 0.6) * 0.03;
+
+                    avatar.torsoGroup.position.y = 2.0 + breathe;
+                    avatar.headPivot.rotation.y = sway;
+                    avatar.headPivot.rotation.z = sway * 0.5;
+                    avatar.leftArmPivot.rotation.z = -0.08 + breathe * 0.5;
+                    avatar.rightArmPivot.rotation.z = 0.08 - breathe * 0.5;
+                    avatar.leftArmPivot.rotation.x = sway;
+                    avatar.rightArmPivot.rotation.x = -sway;
+                }
+            }
+
+            move(dx, dz, dt, speed) {
+                if (this.isDead || this.isDying || this.isStunned > 0) return;
+
+                if (dx === 0 && dz === 0) {
+                    this.avatar.torsoGroup.position.y = 2.0;
+                    this.avatar.leftLegPivot.rotation.x = 0;
+                    this.avatar.rightLegPivot.rotation.x = 0;
+                    if (isShiftLock && this === playerObj) this.rotationAngle = cameraAngleX + Math.PI;
+                    return;
+                }
+
+                const len = Math.hypot(dx, dz);
+                const moveDist = speed * dt;
+                this.x += (dx / len) * moveDist;
+                this.z += (dz / len) * moveDist;
+
+                resolveWallCollisions(this, 1.2);
+
+                if (isShiftLock && this === playerObj) this.rotationAngle = cameraAngleX + Math.PI;
+                else this.rotationAngle = Math.atan2(dx, dz);
+
+                // Roblox R6 Walking/Running Dynamic Limb Counter-Swing
+                const isRunningFast = this.isSprinting || speed > 11.0;
+                const animSpeedMult = isRunningFast ? 2.4 : 1.6;
+                const swingAmp = isRunningFast ? 0.95 : 0.65;
+
+                this.avatar.animTimer += dt * speed * animSpeedMult;
+                const swing = Math.sin(this.avatar.animTimer) * swingAmp;
+                const absSwing = Math.abs(Math.sin(this.avatar.animTimer));
+
+                this.avatar.torsoGroup.rotation.x = isRunningFast ? 0.22 : 0.08;
+                this.avatar.torsoGroup.position.y = 2.0 + absSwing * (isRunningFast ? 0.25 : 0.12);
+                this.avatar.torsoGroup.rotation.y = Math.sin(this.avatar.animTimer) * (isRunningFast ? 0.2 : 0.08);
+
+                this.avatar.leftArmPivot.rotation.x = swing;
+                this.avatar.rightArmPivot.rotation.x = -swing;
+                this.avatar.leftLegPivot.rotation.x = -swing * 1.1;
+                this.avatar.rightLegPivot.rotation.x = swing * 1.1;
+
+                if (isRunningFast && Math.random() < 0.35) {
+                    createRunDustFx3D(this.x, 0.1, this.z);
+                }
+            }
+
+            aiMove(dx, dz, dt, speed) {
+                if (this.isDead || this.isDying || this.isStunned > 0 || (dx === 0 && dz === 0)) return;
+
+                let angle = Math.atan2(dx, dz);
+
+                let testDist = 2.2;
+                let testX = this.x + Math.sin(angle) * testDist;
+                let testZ = this.z + Math.cos(angle) * testDist;
+
+                let isBlocked = false;
+                for (let w of wallColliders) {
+                    if (testX >= w.minX && testX <= w.maxX && testZ >= w.minZ && testZ <= w.maxZ) {
+                        isBlocked = true;
+                        break;
+                    }
+                }
+
+                if (isBlocked) {
+                    this.aiRayAngleOffset += (Math.random() > 0.5 ? 0.4 : -0.4);
+                    angle += this.aiRayAngleOffset;
+                    dx = Math.sin(angle);
+                    dz = Math.cos(angle);
+                } else {
+                    this.aiRayAngleOffset *= 0.8;
+                }
+
+                const len = Math.hypot(dx, dz);
+                const moveDist = speed * dt;
+                this.x += (dx / len) * moveDist;
+                this.z += (dz / len) * moveDist;
+
+                resolveWallCollisions(this, 1.2);
+                this.rotationAngle = angle;
+
+                const isRunningFast = speed > 11.0;
+                const animSpeedMult = isRunningFast ? 2.4 : 1.6;
+                const swingAmp = isRunningFast ? 0.95 : 0.65;
+
+                this.avatar.animTimer += dt * speed * animSpeedMult;
+                const swing = Math.sin(this.avatar.animTimer) * swingAmp;
+                const absSwing = Math.abs(Math.sin(this.avatar.animTimer));
+
+                this.avatar.torsoGroup.rotation.x = isRunningFast ? 0.22 : 0.08;
+                this.avatar.torsoGroup.position.y = 2.0 + absSwing * (isRunningFast ? 0.25 : 0.12);
+                this.avatar.torsoGroup.rotation.y = Math.sin(this.avatar.animTimer) * (isRunningFast ? 0.2 : 0.08);
+
+                this.avatar.leftArmPivot.rotation.x = swing;
+                this.avatar.rightArmPivot.rotation.x = -swing;
+                this.avatar.leftLegPivot.rotation.x = -swing * 1.1;
+                this.avatar.rightLegPivot.rotation.x = swing * 1.1;
+
+                if (isRunningFast && Math.random() < 0.35) {
+                    createRunDustFx3D(this.x, 0.1, this.z);
+                }
+            }
+
+            attackWithKnife() {
+                if (this.attackCooldown > 0 || this.role !== 'KILLER' || this.isDead || this.isDying || this.isStunned > 0) return;
+
+                this.slashAnimTimer = 0.4;
+                this.attackCooldown = 2.2;
+                audio.playSlashSound();
+
+                createSlashFx3D(this.x, 1.8, this.z, this.rotationAngle, 0xef4444);
+
+                const targets = [playerObj, ...survivorsList].filter(s => s && s.role === 'SURVIVOR' && !s.isDead && !s.isDying && s.health > 0);
+                
+                targets.forEach(survivor => {
+                    if (Math.hypot(survivor.x - this.x, survivor.z - this.z) < 3.8) {
+                        survivor.health = Math.max(0, survivor.health - 20);
+                        audio.playScream();
+                        createBlood3D(survivor.x, 2.0, survivor.z);
+
+                        if (survivor.health <= 0 && !survivor.isDying) {
+                            survivor.triggerDeathRagdoll();
+                            updateAliveCountUI();
+                            triggerRedFlash();
+
+                            if (survivor === playerObj) triggerGameOver(false, "살인마의 공격에 사망했습니다!");
+                            else checkAllSurvivorsDead();
+                        }
+                    }
+                });
+            }
+
+            useBleedAttack() {
+                if (this.role !== 'KILLER' || this.rAbilityCD > 0 || this.isDead || this.isDying || this.isStunned > 0) return;
+
+                this.rAbilityCD = 12.0;
+                this.bleedAnimTimer = 0.5;
+                audio.playSlashSound();
+
+                createSlashFx3D(this.x, 1.6, this.z, this.rotationAngle, 0xdc2626);
+
+                const targets = [playerObj, ...survivorsList].filter(s => s && s.role === 'SURVIVOR' && !s.isDead && !s.isDying && s.health > 0);
+                targets.forEach(survivor => {
+                    if (Math.hypot(survivor.x - this.x, survivor.z - this.z) < 4.2) {
+                        survivor.health = Math.max(0, survivor.health - 20);
+                        survivor.bleedTimer = 5.0;
+                        audio.playScream();
+                        createBlood3D(survivor.x, 2.0, survivor.z);
+
+                        if (survivor.health <= 0 && !survivor.isDying) {
+                            survivor.triggerDeathRagdoll();
+                            updateAliveCountUI();
+                            triggerRedFlash();
+
+                            if (survivor === playerObj) triggerGameOver(false, "출혈 공격에 사망했습니다!");
+                            else checkAllSurvivorsDead();
+                        }
+                    }
+                });
+            }
+
+            usePunch() {
+                if (this.punchCooldown > 0 || this.role !== 'SURVIVOR' || this.isDead || this.isDying || this.isStunned > 0) return;
+
+                this.punchCooldown = 6.0;
+                this.punchAnimTimer = 0.4;
+                audio.playPunchSound();
+
+                const impactX = this.x + Math.sin(this.rotationAngle) * 2.0;
+                const impactZ = this.z + Math.cos(this.rotationAngle) * 2.0;
+                createPunchImpactFx3D(impactX, 1.8, impactZ);
+
+                if (killerObj && !killerObj.isDead && !killerObj.isDying) {
+                    const distToKiller = Math.hypot(killerObj.x - this.x, killerObj.z - this.z);
+                    if (distToKiller < 3.5) {
+                        killerObj.isStunned = 2.0;
+                        createBlood3D(killerObj.x, 2.0, killerObj.z);
+                        audio.playBeep(200, 0.2, 'square');
+                        showToast("생존자의 펀치! 살인마가 2초간 기절했습니다!", "text-yellow-400");
+                    }
+                }
+            }
+
+            updateAI(dt, speed) {
+                if (this.isDead || this.isDying) return;
+
+                if (this.role === 'KILLER') {
+                    if (this.isStunned > 0) return;
+
+                    let nearestTarget = null;
+                    let minDist = Infinity;
+                    const validSurvivors = [playerObj, ...survivorsList].filter(s => s && s.role === 'SURVIVOR' && !s.isDead && !s.isDying && s.health > 0);
+
+                    validSurvivors.forEach(s => {
+                        const d = Math.hypot(s.x - this.x, s.z - this.z);
+                        if (d < minDist) { minDist = d; nearestTarget = s; }
+                    });
+
+                    const blockingPallet = pallets.find(p => p.dropped && !p.broken && Math.hypot(p.x - this.x, p.z - this.z) < 3.2);
+                    if (blockingPallet) {
+                        this.kickAnimTimer = 0.45;
+                        blockingPallet.broken = true;
+                        scene.remove(blockingPallet.mesh);
+                        audio.playPalletCrash();
+                        this.isStunned = 0.8;
+                        showToast("살인마가 도주용 판자를 부수었습니다!", "text-red-500");
+                        return;
+                    }
+
+                    if (nearestTarget && minDist < 28.0) {
+                        this.aiState = 'CHASE';
+                        this.lastKnownPos = { x: nearestTarget.x, z: nearestTarget.z };
+                        this.lostTargetTimer = 3.0;
+
+                        this.aiMove(nearestTarget.x - this.x, nearestTarget.z - this.z, dt, speed);
+
+                        if (minDist <= 4.2 && this.rAbilityCD <= 0) {
+                            this.useBleedAttack();
+                        } else if (minDist <= 3.2 && this.attackCooldown <= 0) {
+                            this.attackWithKnife();
+                        }
+                    } else if (this.lostTargetTimer > 0 && this.lastKnownPos) {
+                        this.lostTargetTimer -= dt;
+                        this.aiMove(this.lastKnownPos.x - this.x, this.lastKnownPos.z - this.z, dt, speed);
+                    } else {
+                        this.aiState = 'PATROL';
+                        const uncompletedGens = generators.filter(g => !g.completed);
+
+                        if (uncompletedGens.length > 0) {
+                            const patrolTarget = uncompletedGens[this.patrolIndex % uncompletedGens.length];
+                            const distToPatrol = Math.hypot(patrolTarget.x - this.x, patrolTarget.z - this.z);
+
+                            if (distToPatrol < 4.0) {
+                                this.patrolIndex++;
+                            } else {
+                                this.aiMove(patrolTarget.x - this.x, patrolTarget.z - this.z, dt, speed * 0.85);
+                            }
+                        }
+                    }
+                } else {
+                    if (this.health <= 60 && this.hasMedkit) {
+                        this.health = Math.min(100, this.health + 40);
+                        this.hasMedkit = false;
+                        audio.playBeep(700, 0.2);
+                        return;
+                    }
+
+                    if (!this.hasMedkit && this.health < 100) {
+                        const medkit = mapItems.find(i => !i.picked && Math.hypot(i.x - this.x, i.z - this.z) < 8.0);
+                        if (medkit) {
+                            const d = Math.hypot(medkit.x - this.x, medkit.z - this.z);
+                            if (d > 2.0) {
+                                this.aiMove(medkit.x - this.x, medkit.z - this.z, dt, speed);
+                                return;
+                            } else {
+                                medkit.picked = true;
+                                scene.remove(medkit.mesh);
+                                this.hasMedkit = true;
+                            }
+                        }
+                    }
+
+                    if (killerObj && !killerObj.isDead && !killerObj.isDying) {
+                        const distToKiller = Math.hypot(killerObj.x - this.x, killerObj.z - this.z);
+                        if (distToKiller < 18.0) {
+                            this.aiState = 'FLEE';
+                            this.isSprinting = this.stamina > 15;
+
+                            const nearPallet = pallets.find(p => !p.dropped && !p.broken && Math.hypot(p.x - this.x, p.z - this.z) < 3.5);
+                            if (nearPallet && distToKiller < 8.0) {
+                                this.palletSlamTimer = 0.4;
+                                nearPallet.dropped = true;
+                                nearPallet.mesh.rotation.z = Math.PI / 2;
+                                nearPallet.mesh.position.y = 0.6;
+                                wallColliders.push({ minX: nearPallet.x - 1.8, maxX: nearPallet.x + 1.8, minZ: nearPallet.z - 1.8, maxZ: nearPallet.z + 1.8 });
+                                audio.playPalletCrash();
+                            }
+
+                            if (distToKiller < 3.5 && this.punchCooldown <= 0) {
+                                this.usePunch();
+                            } else {
+                                this.aiMove(this.x - killerObj.x, this.z - killerObj.z, dt, speed * (this.isSprinting ? 1.45 : 1.0));
+                            }
+                            return;
+                        }
+                    }
+
+                    if (exitGateObj && exitGateObj.opened) {
+                        this.aiState = 'ESCAPE';
+                        const distToExit = Math.hypot(exitGateObj.x - this.x, exitGateObj.z - this.z);
+                        if (distToExit > 3.0) {
+                            this.aiMove(exitGateObj.x - this.x, exitGateObj.z - this.z, dt, speed);
+                        }
+                        return;
+                    }
+
+                    const uncompletedGens = generators.filter(g => !g.completed);
+                    if (uncompletedGens.length > 0) {
+                        this.aiState = 'REPAIR';
+                        if (!this.targetGen || this.targetGen.completed) {
+                            const sortedByDist = [...uncompletedGens].sort((a, b) => Math.hypot(a.x - this.x, a.z - this.z) - Math.hypot(b.x - this.x, b.z - this.z));
+                            const idx = Math.floor(Math.random() * sortedByDist.length);
+                            this.targetGen = sortedByDist[idx] || sortedByDist[0];
+                        }
+
+                        const distToGen = Math.hypot(this.targetGen.x - this.x, this.targetGen.z - this.z);
+                        if (distToGen > 3.5) {
+                            this.aiMove(this.targetGen.x - this.x, this.targetGen.z - this.z, dt, speed);
+                        } else {
+                            this.targetGen.progress = Math.min(100, this.targetGen.progress + 6.5 * dt);
+                            if (this.targetGen.progress >= 100 && !this.targetGen.completed) {
+                                this.targetGen.completed = true;
+                                this.targetGen.statusLight.material.color.setHex(0x10b981);
+                                this.targetGen.pointLight.color.setHex(0x10b981);
+                                audio.playGeneratorFix();
+                                checkGeneratorsStatus();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function resolveWallCollisions(entity, radius = 1.2) {
+            for (let pass = 0; pass < 4; pass++) {
+                for (let w of wallColliders) {
+                    let cx = Math.max(w.minX, Math.min(entity.x, w.maxX));
+                    let cz = Math.max(w.minZ, Math.min(entity.z, w.maxZ));
+
+                    let dx = entity.x - cx;
+                    let dz = entity.z - cz;
+                    let distSq = dx * dx + dz * dz;
+
+                    if (distSq < radius * radius) {
+                        if (distSq < 0.00001) {
+                            entity.x += radius;
+                        } else {
+                            let dist = Math.sqrt(distSq);
+                            let overlap = radius - dist;
+                            entity.x += (dx / dist) * overlap;
+                            entity.z += (dz / dist) * overlap;
+                        }
+                    }
+                }
+            }
+        }
+
+        function triggerQTE(gen) {
+            if (qteActive) return;
+            qteActive = true;
+            qteCurrentGen = gen;
+            qteAngle = 0;
+            qteTargetStart = Math.random() * 1.5 + 1.2;
+            qteTargetEnd = qteTargetStart + 0.55;
+
+            document.getElementById('qte-container').classList.remove('hidden');
+        }
+
+        function updateQTE() {
+            if (!qteActive) return;
+            qteAngle += qteSpeed;
+
+            const qCanvas = document.getElementById('qte-canvas');
+            const qctx = qCanvas.getContext('2d');
+            qctx.clearRect(0, 0, 160, 160);
+
+            const cx = 80, cy = 80, r = 60;
+
+            qctx.beginPath(); qctx.arc(cx, cy, r, 0, Math.PI * 2);
+            qctx.strokeStyle = '#374151'; qctx.lineWidth = 12; qctx.stroke();
+
+            qctx.beginPath(); qctx.arc(cx, cy, r, qteTargetStart, qteTargetEnd);
+            qctx.strokeStyle = '#10B981'; qctx.lineWidth = 14; qctx.stroke();
+
+            const nx = cx + Math.cos(qteAngle) * r;
+            const ny = cy + Math.sin(qteAngle) * r;
+
+            qctx.beginPath(); qctx.moveTo(cx, cy); qctx.lineTo(nx, ny);
+            qctx.strokeStyle = '#EF4444'; qctx.lineWidth = 4; qctx.stroke();
+
+            if (qteAngle >= Math.PI * 2) resolveQTE(false);
+        }
+
+        function resolveQTE(success) {
+            qteActive = false;
+            document.getElementById('qte-container').classList.add('hidden');
+
+            if (success) {
+                showToast("스킬 체크 성공! (+20% 수리)", "text-emerald-400");
+                audio.playBeep(880, 0.15);
+                if (qteCurrentGen) {
+                    qteCurrentGen.progress = Math.min(100, qteCurrentGen.progress + 20);
+                    if (qteCurrentGen.progress >= 100 && !qteCurrentGen.completed) {
+                        qteCurrentGen.completed = true;
+                        qteCurrentGen.statusLight.material.color.setHex(0x10b981);
+                        qteCurrentGen.pointLight.color.setHex(0x10b981);
+                        audio.playGeneratorFix();
+                        checkGeneratorsStatus();
+                    }
+                }
+            } else {
+                showToast("수리 실패! 폭발이 발생했습니다!", "text-red-500");
+                audio.playBeep(140, 0.35, 'sawtooth');
+            }
+        }
+
+        function checkGeneratorsStatus() {
+            const completedCount = generators.filter(g => g.completed).length;
+            document.getElementById('gen-count-text').innerText = `${completedCount} / 4`;
+
+            if (completedCount >= 4 && !exitGateObj.opened) {
+                openExitGate();
+            }
+        }
+
+        function openExitGate() {
+            if (!exitGateObj.opened) {
+                exitGateObj.opened = true;
+                exitGateObj.lightMesh.material.color.setHex(0x10b981);
+                showToast("3D 탈출구가 열렸습니다! 탈출하세요!", "text-yellow-400");
+                document.getElementById('exit-status-text').innerText = "개방됨!";
+                document.getElementById('exit-status-text').className = "text-xs font-bold text-emerald-400 animate-pulse";
+                document.getElementById('exit-icon').className = "fa-solid fa-door-open text-emerald-400 text-xl";
+            }
+        }
+
+        function triggerRedFlash() {
+            const flash = document.getElementById('red-flash-overlay');
+            if (!flash) return;
+            flash.classList.remove('opacity-0');
+            flash.classList.add('opacity-80');
+            setTimeout(() => {
+                flash.classList.remove('opacity-80');
+                flash.classList.add('opacity-0');
+            }, 250);
+        }
+
+        function createBlood3D(x, y, z) {
+            for (let i = 0; i < 12; i++) {
+                const particle = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.15, 8, 8),
+                    new THREE.MeshBasicMaterial({ color: 0xdc2626 })
+                );
+                particle.position.set(x, y, z);
+                scene.add(particle);
+                particles3D.push({
+                    mesh: particle,
+                    vx: (Math.random() - 0.5) * 6, vy: Math.random() * 5 + 2, vz: (Math.random() - 0.5) * 6,
+                    life: 0.8
+                });
+            }
+        }
+
+        // 3D Visual Effect Functions for Skills
+        function createSlashFx3D(x, y, z, rotationAngle, colorHex) {
+            for (let i = 0; i < 15; i++) {
+                const pMat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.9 });
+                const particle = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 1.2), pMat);
+                
+                const forwardDist = 1.2 + Math.random() * 1.5;
+                const sideDist = (Math.random() - 0.5) * 2.2;
+
+                particle.position.set(
+                    x + Math.sin(rotationAngle) * forwardDist + Math.cos(rotationAngle) * sideDist,
+                    y + (Math.random() - 0.5) * 1.0,
+                    z + Math.cos(rotationAngle) * forwardDist - Math.sin(rotationAngle) * sideDist
+                );
+                particle.rotation.y = rotationAngle + (Math.random() - 0.5) * 0.8;
+                scene.add(particle);
+
+                particles3D.push({
+                    mesh: particle,
+                    vx: Math.sin(rotationAngle) * 8.0,
+                    vy: (Math.random() - 0.5) * 2.0,
+                    vz: Math.cos(rotationAngle) * 8.0,
+                    life: 0.35
+                });
+            }
+        }
+
+        function createPunchImpactFx3D(x, y, z) {
+            for (let i = 0; i < 16; i++) {
+                const particle = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.18, 8, 8),
+                    new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+                );
+                particle.position.set(x, y, z);
+                scene.add(particle);
+                particles3D.push({
+                    mesh: particle,
+                    vx: (Math.random() - 0.5) * 10, vy: Math.random() * 6 + 1, vz: (Math.random() - 0.5) * 10,
+                    life: 0.4
+                });
+            }
+        }
+
+        function createDashTrail3D(x, y, z) {
+            const particle = new THREE.Mesh(
+                new THREE.BoxGeometry(0.4, 0.2, 0.4),
+                new THREE.MeshBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.6 })
+            );
+            particle.position.set(x + (Math.random() - 0.5) * 0.6, y, z + (Math.random() - 0.5) * 0.6);
+            scene.add(particle);
+            particles3D.push({
+                mesh: particle,
+                vx: 0, vy: 0.8, vz: 0,
+                life: 0.3
+            });
+        }
+
+        function createRunDustFx3D(x, y, z) {
+            const particle = new THREE.Mesh(
+                new THREE.SphereGeometry(0.2, 6, 6),
+                new THREE.MeshBasicMaterial({ color: 0x64748b, transparent: true, opacity: 0.4 })
+            );
+            particle.position.set(x + (Math.random() - 0.5) * 0.8, y, z + (Math.random() - 0.5) * 0.8);
+            scene.add(particle);
+            particles3D.push({
+                mesh: particle,
+                vx: (Math.random() - 0.5) * 1.5,
+                vy: Math.random() * 0.8 + 0.3,
+                vz: (Math.random() - 0.5) * 1.5,
+                life: 0.35
+            });
+        }
+
+        function drawMinimap() {
+            const canvas = document.getElementById('minimap-canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, 100, 100);
+
+            const scale = 100 / MAP_SIZE;
+            const offsetX = 50; const offsetZ = 50;
+
+            // Draw Generators
+            generators.forEach(g => {
+                ctx.fillStyle = g.completed ? '#10b981' : '#d97706';
+                ctx.beginPath();
+                ctx.arc(g.x * scale + offsetX, g.z * scale + offsetZ, 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Draw Survivors
+            [playerObj, ...survivorsList].filter(s => s && s.role === 'SURVIVOR' && !s.isDead).forEach(s => {
+                ctx.fillStyle = '#38bdf8';
+                ctx.beginPath();
+                ctx.arc(s.x * scale + offsetX, s.z * scale + offsetZ, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Draw Killer
+            if (killerObj && !killerObj.isDead) {
+                ctx.fillStyle = '#ef4444';
+                ctx.beginPath();
+                ctx.arc(killerObj.x * scale + offsetX, killerObj.z * scale + offsetZ, 3.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function updateGame(dt) {
+            if (gameState !== 'PLAYING') return;
+
+            gameTime += dt;
+
+            remainingTime = Math.max(0, remainingTime - dt);
+            const minutes = Math.floor(remainingTime / 60);
+            const seconds = Math.floor(remainingTime % 60);
+            document.getElementById('game-timer-text').innerText = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+            if (remainingTime <= 0 && !exitGateObj.opened) openExitGate();
+
+            // 프레임 독립형 감쇄(Exponential Decay)로 카메라 회전 및 떨림 완화
+            const camAngleLerp = 1.0 - Math.exp(-14 * dt);
+            const camPosLerp = 1.0 - Math.exp(-12 * dt);
+
+            cameraAngleX += (targetCameraAngleX - cameraAngleX) * camAngleLerp;
+            cameraAngleY += (targetCameraAngleY - cameraAngleY) * camAngleLerp;
+
+            if (isShiftLock && playerObj && !playerObj.isDead) {
+                let targetRot = cameraAngleX + Math.PI;
+                let diff = targetRot - playerObj.rotationAngle;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                playerObj.rotationAngle += diff * camAngleLerp;
+            }
+
+            // Keyboard Movement
+            let moveX = 0, moveZ = 0;
+            if (keys['KeyW'] || keys['w'] || keys['W'] || keys['ArrowUp']) moveZ += 1;
+            if (keys['KeyS'] || keys['s'] || keys['S'] || keys['ArrowDown']) moveZ -= 1;
+            if (keys['KeyA'] || keys['a'] || keys['A'] || keys['ArrowLeft']) moveX -= 1;
+            if (keys['KeyD'] || keys['d'] || keys['D'] || keys['ArrowRight']) moveX += 1;
+
+            if (touchJoystick.active) {
+                moveX = touchJoystick.moveX;
+                moveZ = -touchJoystick.moveY;
+            }
+
+            const camForwardX = -Math.sin(cameraAngleX);
+            const camForwardZ = -Math.cos(cameraAngleX);
+            const camRightX = Math.cos(cameraAngleX);
+            const camRightZ = -Math.sin(cameraAngleX);
+
+            const worldDx = moveX * camRightX + moveZ * camForwardX;
+            const worldDz = moveX * camRightZ + moveZ * camForwardZ;
+
+            playerObj.isSprinting = keys['ControlLeft'] || keys['ControlRight'];
+            playerObj.move(worldDx, worldDz, dt, playerObj.isSprinting && playerObj.stamina > 0 ? playerObj.speed * 1.45 : playerObj.speed);
+            playerObj.update(dt);
+
+            if (killerObj && killerObj !== playerObj) killerObj.update(dt);
+            survivorsList.forEach(s => { if (s !== playerObj) s.update(dt); });
+
+            // Camera Orbit Position Smoothing
+            const horizontalDist = camDistance * Math.cos(cameraAngleY);
+            const verticalDist = camDistance * Math.sin(cameraAngleY);
+
+            const targetCamX = playerObj.x + Math.sin(cameraAngleX) * horizontalDist;
+            const targetCamY = playerObj.avatar.mesh.position.y + 2.5 + verticalDist;
+            const targetCamZ = playerObj.z + Math.cos(cameraAngleX) * horizontalDist;
+
+            camera.position.x += (targetCamX - camera.position.x) * camPosLerp;
+            camera.position.y += (targetCamY - camera.position.y) * camPosLerp;
+            camera.position.z += (targetCamZ - camera.position.z) * camPosLerp;
+            camera.lookAt(playerObj.x, playerObj.avatar.mesh.position.y + 2.0, playerObj.z);
+
+            // Heartbeat Audio & Vignette
+            if (killerObj && playerObj.role === 'SURVIVOR') {
+                const distToKiller = Math.hypot(killerObj.x - playerObj.x, killerObj.z - playerObj.z);
+                const vignette = document.getElementById('heartbeat-vignette');
+                if (distToKiller < 25) {
+                    vignette.classList.add('heartbeat-active');
+                    if (Math.random() < 0.08) audio.playHeartbeat();
+                } else {
+                    vignette.classList.remove('heartbeat-active');
+                }
+            }
+
+            if (qteActive) updateQTE();
+            drawMinimap();
+
+            particles3D.forEach((p, idx) => {
+                p.mesh.position.x += p.vx * dt;
+                p.mesh.position.y += p.vy * dt;
+                p.mesh.position.z += p.vz * dt;
+                p.vy -= 9.8 * dt; p.life -= dt;
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    particles3D.splice(idx, 1);
+                }
+            });
+
+            if (exitGateObj.opened && Math.hypot(playerObj.x - exitGateObj.x, playerObj.z - exitGateObj.z) < 4.0 && !playerObj.isDead) {
+                if (playerObj.role === 'SURVIVOR') triggerGameOver(true, "3D 탈출구를 통해 탈출했습니다! 승리!");
+                else triggerGameOver(false, "생존자들이 탈출했습니다!");
+            }
+
+            document.getElementById('health-bar').style.width = `${Math.max(0, playerObj.health)}%`;
+            document.getElementById('health-text').innerText = `체력: ${Math.round(playerObj.health)}%`;
+            document.getElementById('stamina-bar').style.width = `${(playerObj.stamina / playerObj.maxStamina) * 100}%`;
+            document.getElementById('stamina-text').innerText = `${Math.round(playerObj.stamina)}%`;
+            document.getElementById('item-name-text').innerText = playerObj.hasMedkit ? "구급상자 (E키로 자가치유)" : "없음";
+        }
+
+        function gameLoop(timestamp) {
+            const dt = Math.min((timestamp - lastTimestamp) / 1000, 0.1);
+            lastTimestamp = timestamp;
+
+            updateGame(dt);
+            renderer.render(scene, camera);
+
+            if (gameState === 'PLAYING') requestAnimationFrame(gameLoop);
+        }
+
+        window.addEventListener('contextmenu', e => e.preventDefault());
+
+        function toggleShiftLock() {
+            isShiftLock = !isShiftLock;
+            const btnText = document.getElementById('shiftlock-btn-text');
+            const cursor = document.getElementById('shift-lock-cursor');
+            const btn = document.getElementById('btn-shiftlock');
+
+            if (isShiftLock) {
+                btnText.innerText = "쉬프트락: ON";
+                btnText.className = "text-[10px] text-cyan-400 font-bold";
+                btn.className = "glass-panel p-3 rounded-xl border border-cyan-400 bg-cyan-950/40 flex flex-col items-center justify-center w-20 h-20 active:scale-95 transition-transform";
+                cursor.classList.remove('hidden');
+                
+                const canvas = document.getElementById('webgl-canvas');
+                if (canvas.requestPointerLock) canvas.requestPointerLock();
+                showToast("쉬프트 락 활성화!", "text-cyan-400");
+            } else {
+                btnText.innerText = "쉬프트락: OFF";
+                btnText.className = "text-[10px] text-gray-300";
+                btn.className = "glass-panel p-3 rounded-xl border border-gray-700 flex flex-col items-center justify-center w-20 h-20 active:scale-95 transition-transform hover:border-cyan-500/50";
+                cursor.classList.add('hidden');
+                if (document.exitPointerLock) document.exitPointerLock();
+                showToast("쉬프트 락 비활성화", "text-gray-300");
+            }
+        }
+
+        window.addEventListener('mousedown', e => {
+            if (e.button === 0 && gameState === 'PLAYING' && playerObj && !playerObj.isDead) {
+                if (isShiftLock && document.pointerLockElement !== document.getElementById('webgl-canvas')) {
+                    document.getElementById('webgl-canvas').requestPointerLock();
+                }
+                if (playerObj.role === 'KILLER') playerObj.attackWithKnife();
+                else playerObj.usePunch();
+            } else if (e.button === 2) {
+                isRightMouseDown = true;
+                mouseX = e.clientX; 
+                mouseY = e.clientY;
+            }
+        });
+
+        window.addEventListener('mousemove', e => {
+            if (gameState !== 'PLAYING') return;
+
+            let rawDeltaX = 0;
+            let rawDeltaY = 0;
+
+            if (isShiftLock) {
+                rawDeltaX = e.movementX || 0;
+                rawDeltaY = e.movementY || 0;
+            } else if (isRightMouseDown) {
+                rawDeltaX = e.clientX - mouseX;
+                rawDeltaY = e.clientY - mouseY;
+                mouseX = e.clientX; 
+                mouseY = e.clientY;
+            } else {
+                return;
+            }
+
+            targetCameraAngleX -= rawDeltaX * MOUSE_SENSITIVITY;
+            targetCameraAngleY = Math.max(0.1, Math.min(1.2, targetCameraAngleY + rawDeltaY * (MOUSE_SENSITIVITY * 0.8)));
+        });
+
+        window.addEventListener('mouseup', e => { if (e.button === 2) isRightMouseDown = false; });
+        window.addEventListener('wheel', e => { if (gameState === 'PLAYING') camDistance = Math.max(6, Math.min(32, camDistance + e.deltaY * 0.006)); }, { passive: true });
+
+        function selectRole(role) {
+            selectedRole = role;
+            document.getElementById('select-survivor-btn').className = role === 'SURVIVOR' ? 
+                "group relative overflow-hidden p-5 rounded-xl border-2 border-emerald-400 bg-emerald-900/60 transition-all text-left" :
+                "group relative overflow-hidden p-5 rounded-xl border-2 border-emerald-500/40 bg-emerald-950/30 hover:bg-emerald-900/50 transition-all text-left";
+
+            document.getElementById('select-killer-btn').className = role === 'KILLER' ? 
+                "group relative overflow-hidden p-5 rounded-xl border-2 border-red-500 bg-red-900/60 transition-all text-left" :
+                "group relative overflow-hidden p-5 rounded-xl border-2 border-red-600/40 bg-red-950/30 hover:bg-red-900/50 transition-all text-left";
+        }
+
+        function startGame() {
+            audio.init();
+            initThreeScene();
+            createEnvironment();
+            createGeneratorsAndExit();
+
+            remainingTime = 180;
+
+            if (selectedRole === 'SURVIVOR') {
+                playerObj = new CharacterEntity(-35, -35, 'SURVIVOR', false);
+                killerObj = new CharacterEntity(35, 35, 'KILLER', true);
+                survivorsList = [
+                    new CharacterEntity(-30, -32, 'SURVIVOR', true),
+                    new CharacterEntity(30, -30, 'SURVIVOR', true),
+                    new CharacterEntity(-20, 30, 'SURVIVOR', true)
+                ];
+                document.getElementById('role-badge').innerText = "생존자";
+                document.getElementById('role-badge').className = "text-xs font-bold px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-700";
+                document.getElementById('ability2-name').innerText = "펀치";
+                document.getElementById('ability2-key').innerText = "[F / 좌클릭]";
+                document.getElementById('btn-ability-r').classList.add('hidden');
+            } else {
+                playerObj = new CharacterEntity(35, 35, 'KILLER', false);
+                killerObj = playerObj;
+                survivorsList = [
+                    new CharacterEntity(-35, -35, 'SURVIVOR', true),
+                    new CharacterEntity(30, -30, 'SURVIVOR', true),
+                    new CharacterEntity(-20, 30, 'SURVIVOR', true)
+                ];
+                document.getElementById('role-badge').innerText = "살인마";
+                document.getElementById('role-badge').className = "text-xs font-bold px-2 py-0.5 rounded bg-red-950 text-red-500 border border-red-700";
+                document.getElementById('btn-ability1').querySelector('span').innerText = "공격";
+                document.getElementById('ability2-name').innerText = "섬광탄";
+                document.getElementById('ability2-key').innerText = "[F]";
+                document.getElementById('btn-ability-r').classList.remove('hidden');
+            }
+
+            updateAliveCountUI();
+
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('hud-overlay').classList.remove('hidden');
+
+            if ('ontouchstart' in window) document.getElementById('touch-controls').classList.remove('hidden');
+
+            gameState = 'PLAYING';
+            lastTimestamp = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function handleInteractPress() {
+            if (qteActive) {
+                const inZone = qteAngle >= qteTargetStart && qteAngle <= qteTargetEnd;
+                resolveQTE(inZone);
+                return;
+            }
+
+            // Self-heal with Medkit
+            if (playerObj.role === 'SURVIVOR' && playerObj.hasMedkit && playerObj.health < 100) {
+                playerObj.health = Math.min(100, playerObj.health + 40);
+                playerObj.hasMedkit = false;
+                showToast("구급상자로 체력 +40 회복!", "text-emerald-400");
+                audio.playBeep(700, 0.2);
+                return;
+            }
+
+            // Pick up Item
+            const nearItem = mapItems.find(i => !i.picked && Math.hypot(i.x - playerObj.x, i.z - playerObj.z) < 3.5);
+            if (nearItem && playerObj.role === 'SURVIVOR') {
+                nearItem.picked = true;
+                scene.remove(nearItem.mesh);
+                playerObj.hasMedkit = true;
+                showToast("구급상자를 획득했습니다! (E키로 사용)", "text-cyan-400");
+                audio.playBeep(600, 0.15);
+                return;
+            }
+
+            // Drop or Destroy Pallet with Animations
+            const nearPallet = pallets.find(p => !p.broken && Math.hypot(p.x - playerObj.x, p.z - playerObj.z) < 4.0);
+            if (nearPallet) {
+                if (playerObj.role === 'SURVIVOR' && !nearPallet.dropped) {
+                    playerObj.palletSlamTimer = 0.4;
+                    nearPallet.dropped = true;
+                    nearPallet.mesh.rotation.z = Math.PI / 2;
+                    nearPallet.mesh.position.y = 0.6;
+                    wallColliders.push({ minX: nearPallet.x - 1.8, maxX: nearPallet.x + 1.8, minZ: nearPallet.z - 1.8, maxZ: nearPallet.z + 1.8 });
+                    audio.playPalletCrash();
+                    showToast("판자를 쓰러뜨렸습니다!", "text-yellow-400");
+                    return;
+                } else if (playerObj.role === 'KILLER' && nearPallet.dropped) {
+                    playerObj.kickAnimTimer = 0.45;
+                    nearPallet.broken = true;
+                    scene.remove(nearPallet.mesh);
+                    audio.playPalletCrash();
+                    showToast("판자를 부수었습니다!", "text-red-400");
+                    return;
+                }
+            }
+
+            // Repair Generator
+            const nearGen = generators.find(g => !g.completed && Math.hypot(g.x - playerObj.x, g.z - playerObj.z) < 4.5);
+            if (nearGen) triggerQTE(nearGen);
+        }
+
+        function useAbility(num) {
+            if (num === 1) {
+                if (playerObj.role === 'KILLER') {
+                    playerObj.attackWithKnife();
+                } else if (playerObj.stamina >= 25) {
+                    playerObj.stamina -= 25;
+                    playerObj.dashAnimTimer = 0.8; // Trigger 0.8s Dash Lean & Particle Animation
+                    playerObj.speed *= 1.8;
+                    showToast("3D 대시 사용!", "text-yellow-400");
+                    audio.playBeep(650, 0.1);
+                    setTimeout(() => { playerObj.speed = playerObj.role === 'KILLER' ? 12.0 : 9.5; }, 1400);
+                }
+            } else if (num === 2) {
+                if (playerObj.role === 'SURVIVOR') playerObj.usePunch();
+                else showToast("섬광 스킬 사용!", "text-red-400");
+            } else if (num === 3) {
+                if (playerObj.role === 'KILLER') playerObj.useBleedAttack();
+            }
+        }
+
+        function updateAliveCountUI() {
+            const aliveCount = [playerObj, ...survivorsList].filter(s => s && s.role === 'SURVIVOR' && !s.isDead).length;
+            document.getElementById('survivors-alive-text').innerText = `${aliveCount} 명`;
+        }
+
+        function checkAllSurvivorsDead() {
+            const aliveSurvivors = [playerObj, ...survivorsList].filter(s => s && s.role === 'SURVIVOR' && !s.isDead);
+            if (aliveSurvivors.length === 0) {
+                if (selectedRole === 'KILLER') triggerGameOver(true, "모든 생존자를 처단했습니다! 살인마 승리!");
+                else triggerGameOver(false, "모든 생존자가 전멸했습니다!");
+            }
+        }
+
+        function showToast(msg, colorClass = "text-yellow-400") {
+            const toast = document.getElementById('toast-msg');
+            toast.innerText = msg;
+            toast.className = `self-center bg-black/90 ${colorClass} px-6 py-2.5 rounded-full text-sm font-bold border border-yellow-500/30 opacity-100 transition-opacity duration-300 shadow-2xl`;
+            setTimeout(() => { toast.classList.add('opacity-0'); }, 2000);
+        }
+
+        function triggerGameOver(isWin, message) {
+            gameState = 'GAMEOVER';
+            document.getElementById('hud-overlay').classList.add('hidden');
+            document.getElementById('result-screen').classList.remove('hidden');
+
+            document.getElementById('result-title').innerText = isWin ? "VICTORY" : "DEFEAT";
+            document.getElementById('result-title').className = isWin ? "title-font text-4xl font-extrabold mb-2 text-emerald-400" : "title-font text-4xl font-extrabold mb-2 text-red-600";
+            document.getElementById('result-desc').innerText = message;
+            document.getElementById('stat-gens').innerText = generators.filter(g => g.completed).length;
+            document.getElementById('stat-time').innerText = `${Math.floor(gameTime)} 초`;
+            document.getElementById('stat-score').innerText = `${Math.floor(gameTime * 12 + (isWin ? 600 : 150))} XP`;
+        }
+
+        function restartToMenu() {
+            document.getElementById('result-screen').classList.add('hidden');
+            document.getElementById('start-screen').classList.remove('hidden');
+            gameState = 'MENU';
+            location.reload();
+        }
+
+        window.addEventListener('resize', () => {
+            if (camera && renderer) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        });
+
+        window.addEventListener('keydown', e => {
+            if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight') && !keys[e.code]) toggleShiftLock();
+
+            keys[e.code] = true;
+            if (e.key) keys[e.key] = true;
+
+            if (e.code === 'KeyE' || e.key === 'e' || e.key === 'E') handleInteractPress();
+            if (e.code === 'Space' || e.key === ' ') {
+                if (qteActive) handleInteractPress();
+                else useAbility(1);
+            }
+            if (e.code === 'KeyF' || e.key === 'f' || e.key === 'F') useAbility(2);
+            if (e.code === 'KeyR' || e.key === 'r' || e.key === 'R') useAbility(3);
+        });
+
+        window.addEventListener('keyup', e => { 
+            keys[e.code] = false; 
+            if (e.key) keys[e.key] = false;
+        });
+
+        // Touch Joystick Logic
+        const joyZone = document.getElementById('joystick-zone');
+        const joyKnob = document.getElementById('joystick-knob');
+
+        joyZone.addEventListener('touchstart', e => {
+            touchJoystick.active = true;
+            const rect = joyZone.getBoundingClientRect();
+            touchJoystick.startX = rect.left + rect.width / 2;
+            touchJoystick.startY = rect.top + rect.height / 2;
+        });
+
+        window.addEventListener('touchmove', e => {
+            if (!touchJoystick.active) return;
+            const touch = e.touches[0];
+            const dx = touch.clientX - touchJoystick.startX;
+            const dy = touch.clientY - touchJoystick.startY;
+            const dist = Math.hypot(dx, dy);
+            const maxDist = 40;
+
+            const angle = Math.atan2(dy, dx);
+            const knobDist = Math.min(dist, maxDist);
+
+            joyKnob.style.transform = `translate(${Math.cos(angle) * knobDist}px, ${Math.sin(angle) * knobDist}px)`;
+            touchJoystick.moveX = Math.cos(angle);
+            touchJoystick.moveY = Math.sin(angle);
+        });
+
+        window.addEventListener('touchend', () => {
+            touchJoystick.active = false;
+            touchJoystick.moveX = 0; touchJoystick.moveY = 0;
+            joyKnob.style.transform = `translate(0px, 0px)`;
+        });
+    </script>
+</body>
+</html>
